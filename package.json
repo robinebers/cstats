@@ -2,6 +2,14 @@
   "name": "cstats",
   "version": "0.1.0",
   "description": "Cursor usage stats CLI with mapped token costs.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/robinebers/cstats.git"
+  },
+  "bugs": {
+    "url": "https://github.com/robinebers/cstats/issues"
+  },
+  "homepage": "https://github.com/robinebers/cstats#readme",
   "type": "module",
   "bin": {
     "cstats": "./dist/src/cli.js"
