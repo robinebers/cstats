@@ -1,0 +1,5 @@
+Date,Kind,Model,Max Mode,Input (w/ Cache Write),Input (w/o Cache Write),Cache Read,Output Tokens,Total Tokens,Cost
+"2026-03-20T12:00:00.000Z","Free","gpt-5.4-xhigh","No","0","585209","749568","18733","1353510","Free"
+"2026-03-20T13:00:00.000Z","Free","composer-1.5","No","0","87352","227659","15784","330795","Free"
+"2026-03-19T12:00:00.000Z","Free","claude-4.6-opus-high-thinking-fast","Yes","48912","885","625041","4719","679557","Free"
+"2026-03-19T13:00:00.000Z","Free","composer-2","No","0","1000","5000","2000","8000","Free"
