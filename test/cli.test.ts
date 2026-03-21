@@ -20,12 +20,8 @@ describe('cli args', () => {
     });
   });
 
-  it('accepts detailed aliases for daily output', () => {
+  it('accepts the detailed flag for daily output', () => {
     expect(parseArgs(['--detailed'])).toMatchObject({
-      output: 'daily',
-      detailed: true,
-    });
-    expect(parseArgs(['--defailed'])).toMatchObject({
       output: 'daily',
       detailed: true,
     });

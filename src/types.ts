@@ -67,17 +67,15 @@ export type ProviderReportRow = {
   provider: string;
 } & ReportTotals;
 
-export type DailyModelSection = {
+export type DailySection<Row extends ReportTotals> = {
   date: string;
-  rows: ModelReportRow[];
+  rows: Row[];
   totals: ReportTotals;
 };
 
-export type DailyProviderSection = {
-  date: string;
-  rows: ProviderReportRow[];
-  totals: ReportTotals;
-};
+export type DailyModelSection = DailySection<ModelReportRow>;
+
+export type DailyProviderSection = DailySection<ProviderReportRow>;
 
 export type DailySummarySection = {
   date: string;
@@ -89,13 +87,17 @@ export type ReportWarnings = {
   unpricedModels: string[];
 };
 
+export type DailyReportData = DailySummarySection[] | DailyModelSection[] | DailyProviderSection[];
+
+export type SummaryReportData = ModelReportRow[] | ProviderReportRow[];
+
 export type DailyJsonOutput = {
   output: 'daily';
   group: GroupMode;
   detailed: boolean;
   since: string;
   until: string;
-  days: DailySummarySection[] | DailyModelSection[] | DailyProviderSection[];
+  days: DailyReportData;
   totals: ReportTotals;
   warnings: ReportWarnings;
 };
@@ -105,7 +107,7 @@ export type SummaryJsonOutput = {
   group: GroupMode;
   since: string;
   until: string;
-  rows: ModelReportRow[] | ProviderReportRow[];
+  rows: SummaryReportData;
   totals: ReportTotals;
   warnings: ReportWarnings;
 };

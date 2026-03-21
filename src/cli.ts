@@ -11,15 +11,17 @@ import {
   aggregateSummaryByModel,
   aggregateSummaryByProvider,
   calculateTotals,
+  hasRowUsage,
 } from './aggregate.js';
 import { downloadUsageCsv, parseUsageCsv } from './cursor-export.js';
 import { resolveDateRange, toEpochRange } from './date-range.js';
 import { getUnpricedModels } from './pricing.js';
 import {
-  createDailyModelSummaryTable,
+  ResponsiveTable,
   createDailyModelReportTable,
-  createDailyProviderSummaryTable,
+  createDailyModelSummaryTable,
   createDailyProviderReportTable,
+  createDailyProviderSummaryTable,
   createSummaryModelReportTable,
   createSummaryProviderReportTable,
   formatDailyModelSectionRow,
@@ -29,9 +31,35 @@ import {
   formatSummaryProviderRow,
   formatSummaryTotalsRow,
 } from './table.js';
-import type { GroupMode, JsonOutput, OutputMode, ParsedArgs } from './types.js';
+import type {
+  DailyJsonOutput,
+  DailyReportData,
+  GroupMode,
+  JsonOutput,
+  OutputMode,
+  ParsedArgs,
+  ReportTotals,
+  SummaryJsonOutput,
+  SummaryReportData,
+  UsageRow,
+} from './types.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+type DailyModeKey =
+  | 'daily:model:summary'
+  | 'daily:model:detailed'
+  | 'daily:provider:summary'
+  | 'daily:provider:detailed';
+type SummaryModeKey = 'summary:model' | 'summary:provider';
+type ReportModeKey = DailyModeKey | SummaryModeKey;
+type TableRow = Parameters<ResponsiveTable['push']>[0];
+
+type PreparedReport = {
+  isEmpty: boolean;
+  render: (totals: ReportTotals) => string;
+  toJson: (since: string, until: string, totals: ReportTotals, unpricedModels: string[]) => JsonOutput;
+};
 
 function getVersion(): string {
   const packageJsonPath = fileURLToPath(new URL('../package.json', import.meta.url));
@@ -73,6 +101,31 @@ Options:
   -v, --version              Display version`);
 }
 
+function getNextArgValue(argv: string[], index: number, arg: string): string {
+  const value = argv[index + 1];
+  if (value === undefined) {
+    throw new Error(`Missing value for ${arg}.`);
+  }
+
+  return value;
+}
+
+function parseGroupMode(value: string): GroupMode {
+  if (value !== 'model' && value !== 'provider') {
+    throw new Error('The --group flag must be either "model" or "provider".');
+  }
+
+  return value;
+}
+
+function parseOutputMode(value: string): OutputMode {
+  if (value !== 'daily' && value !== 'summary') {
+    throw new Error('The --output flag must be either "daily" or "summary".');
+  }
+
+  return value;
+}
+
 export function parseArgs(argv: string[]): ParsedArgs {
   const parsed: ParsedArgs = {
     json: false,
@@ -88,48 +141,27 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     switch (arg) {
       case '-s':
-      case '--since': {
-        const value = argv[index + 1];
-        if (value === undefined) {
-          throw new Error(`Missing value for ${arg}.`);
-        }
-        parsed.since = value;
+      case '--since':
+        parsed.since = getNextArgValue(argv, index, arg);
         index += 1;
         break;
-      }
       case '-u':
-      case '--until': {
-        const value = argv[index + 1];
-        if (value === undefined) {
-          throw new Error(`Missing value for ${arg}.`);
-        }
-        parsed.until = value;
+      case '--until':
+        parsed.until = getNextArgValue(argv, index, arg);
         index += 1;
         break;
-      }
       case '-g':
-      case '--group': {
-        const value = argv[index + 1];
-        if (value !== 'model' && value !== 'provider') {
-          throw new Error('The --group flag must be either "model" or "provider".');
-        }
-        parsed.group = value;
+      case '--group':
+        parsed.group = parseGroupMode(getNextArgValue(argv, index, arg));
         index += 1;
         break;
-      }
       case '-o':
-      case '--output': {
-        const value = argv[index + 1];
-        if (value !== 'daily' && value !== 'summary') {
-          throw new Error('The --output flag must be either "daily" or "summary".');
-        }
-        parsed.output = value;
+      case '--output':
+        parsed.output = parseOutputMode(getNextArgValue(argv, index, arg));
         index += 1;
         break;
-      }
       case '-d':
       case '--detailed':
-      case '--defailed':
         parsed.detailed = true;
         break;
       case '-j':
@@ -156,105 +188,180 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return parsed;
 }
 
-function renderDailyModel(days: ReturnType<typeof aggregateDailyByModel>): string {
-  const table = createDailyModelReportTable();
-  for (const day of days) {
-    table.push(formatDailyModelSectionRow(day));
-  }
-  return table.toString();
-}
-
-function renderDailyModelSummary(days: ReturnType<typeof aggregateDailySummaryByModel>): string {
-  const table = createDailyModelSummaryTable();
-  for (const day of days) {
-    table.push(formatDailySummaryRow(day));
-  }
-  return table.toString();
-}
-
-function renderDailyProvider(days: ReturnType<typeof aggregateDailyByProvider>): string {
-  const table = createDailyProviderReportTable();
-  for (const day of days) {
-    table.push(formatDailyProviderSectionRow(day));
-  }
-  return table.toString();
-}
-
-function renderDailyProviderSummary(days: ReturnType<typeof aggregateDailySummaryByProvider>): string {
-  const table = createDailyProviderSummaryTable();
-  for (const day of days) {
-    table.push(formatDailySummaryRow(day));
-  }
-  return table.toString();
-}
-
-function renderSummaryModel(rows: ReturnType<typeof aggregateSummaryByModel>, totals: ReturnType<typeof calculateTotals>): string {
-  const table = createSummaryModelReportTable();
-  for (const row of rows) {
-    table.push(formatSummaryModelRow(row));
-  }
-  table.push(formatSummaryTotalsRow(totals));
-  return table.toString();
-}
-
-function renderSummaryProvider(
-  rows: ReturnType<typeof aggregateSummaryByProvider>,
-  totals: ReturnType<typeof calculateTotals>,
+function renderTable<Row>(
+  rows: Row[],
+  createTable: () => ResponsiveTable,
+  formatRow: (row: Row) => TableRow,
 ): string {
-  const table = createSummaryProviderReportTable();
+  const table = createTable();
   for (const row of rows) {
-    table.push(formatSummaryProviderRow(row));
+    table.push(formatRow(row));
+  }
+  return table.toString();
+}
+
+function renderSummaryTable<Row>(
+  rows: Row[],
+  totals: ReportTotals,
+  createTable: () => ResponsiveTable,
+  formatRow: (row: Row) => TableRow,
+): string {
+  const table = createTable();
+  for (const row of rows) {
+    table.push(formatRow(row));
   }
   table.push(formatSummaryTotalsRow(totals));
   return table.toString();
 }
 
-function buildJsonOutput(
-  output: OutputMode,
+function buildDailyJsonOutput(
   group: GroupMode,
   detailed: boolean,
   since: string,
   until: string,
-  data:
-    | ReturnType<typeof aggregateDailySummaryByModel>
-    | ReturnType<typeof aggregateDailySummaryByProvider>
-    | ReturnType<typeof aggregateDailyByModel>
-    | ReturnType<typeof aggregateDailyByProvider>
-    | ReturnType<typeof aggregateSummaryByModel>
-    | ReturnType<typeof aggregateSummaryByProvider>,
-  totals: ReturnType<typeof calculateTotals>,
+  days: DailyReportData,
+  totals: ReportTotals,
   unpricedModels: string[],
-): JsonOutput {
-  if (output === 'summary') {
-    return {
-      output,
-      group,
-      since,
-      until,
-      rows: data as ReturnType<typeof aggregateSummaryByModel> | ReturnType<typeof aggregateSummaryByProvider>,
-      totals,
-      warnings: {
-        unpricedModels,
-      },
-    };
-  }
-
+): DailyJsonOutput {
   return {
-    output,
+    output: 'daily',
     group,
     detailed,
     since,
     until,
-    days: data as
-      | ReturnType<typeof aggregateDailySummaryByModel>
-      | ReturnType<typeof aggregateDailySummaryByProvider>
-      | ReturnType<typeof aggregateDailyByModel>
-      | ReturnType<typeof aggregateDailyByProvider>,
+    days,
     totals,
     warnings: {
       unpricedModels,
     },
   };
+}
+
+function buildSummaryJsonOutput(
+  group: GroupMode,
+  since: string,
+  until: string,
+  rows: SummaryReportData,
+  totals: ReportTotals,
+  unpricedModels: string[],
+): SummaryJsonOutput {
+  return {
+    output: 'summary',
+    group,
+    since,
+    until,
+    rows,
+    totals,
+    warnings: {
+      unpricedModels,
+    },
+  };
+}
+
+function prepareDailyReport<T extends DailyReportData>(
+  usageRows: UsageRow[],
+  group: GroupMode,
+  detailed: boolean,
+  aggregate: (rows: UsageRow[]) => T,
+  createTable: () => ResponsiveTable,
+  formatRow: (row: T[number]) => TableRow,
+): PreparedReport {
+  const days = aggregate(usageRows);
+
+  return {
+    isEmpty: days.length === 0,
+    render: () => renderTable(days, createTable, formatRow),
+    toJson: (since, until, totals, unpricedModels) =>
+      buildDailyJsonOutput(group, detailed, since, until, days, totals, unpricedModels),
+  };
+}
+
+function prepareSummaryReport<T extends SummaryReportData>(
+  usageRows: UsageRow[],
+  group: GroupMode,
+  aggregate: (rows: UsageRow[]) => T,
+  createTable: () => ResponsiveTable,
+  formatRow: (row: T[number]) => TableRow,
+): PreparedReport {
+  const rows = aggregate(usageRows);
+
+  return {
+    isEmpty: rows.length === 0,
+    render: (totals) => renderSummaryTable(rows, totals, createTable, formatRow),
+    toJson: (since, until, totals, unpricedModels) =>
+      buildSummaryJsonOutput(group, since, until, rows, totals, unpricedModels),
+  };
+}
+
+function getReportModeKey(args: ParsedArgs): ReportModeKey {
+  if (args.output === 'summary') {
+    return args.group === 'model' ? 'summary:model' : 'summary:provider';
+  }
+
+  if (args.group === 'model') {
+    return args.detailed ? 'daily:model:detailed' : 'daily:model:summary';
+  }
+
+  return args.detailed ? 'daily:provider:detailed' : 'daily:provider:summary';
+}
+
+const prepareReportByMode: Record<ReportModeKey, (usageRows: UsageRow[]) => PreparedReport> = {
+  'summary:model': (usageRows) =>
+    prepareSummaryReport(
+      usageRows,
+      'model',
+      aggregateSummaryByModel,
+      createSummaryModelReportTable,
+      formatSummaryModelRow,
+    ),
+  'summary:provider': (usageRows) =>
+    prepareSummaryReport(
+      usageRows,
+      'provider',
+      aggregateSummaryByProvider,
+      createSummaryProviderReportTable,
+      formatSummaryProviderRow,
+    ),
+  'daily:model:detailed': (usageRows) =>
+    prepareDailyReport(
+      usageRows,
+      'model',
+      true,
+      aggregateDailyByModel,
+      createDailyModelReportTable,
+      formatDailyModelSectionRow,
+    ),
+  'daily:model:summary': (usageRows) =>
+    prepareDailyReport(
+      usageRows,
+      'model',
+      false,
+      aggregateDailySummaryByModel,
+      createDailyModelSummaryTable,
+      formatDailySummaryRow,
+    ),
+  'daily:provider:detailed': (usageRows) =>
+    prepareDailyReport(
+      usageRows,
+      'provider',
+      true,
+      aggregateDailyByProvider,
+      createDailyProviderReportTable,
+      formatDailyProviderSectionRow,
+    ),
+  'daily:provider:summary': (usageRows) =>
+    prepareDailyReport(
+      usageRows,
+      'provider',
+      false,
+      aggregateDailySummaryByProvider,
+      createDailyProviderSummaryTable,
+      formatDailySummaryRow,
+    ),
+};
+
+function createPreparedReport(args: ParsedArgs, usageRows: UsageRow[]): PreparedReport {
+  return prepareReportByMode[getReportModeKey(args)](usageRows);
 }
 
 async function main(): Promise<void> {
@@ -274,168 +381,31 @@ async function main(): Promise<void> {
     const dateRange = resolveDateRange(args.since, args.until);
     const csvText = await downloadUsageCsv(toEpochRange(dateRange));
     const usageRows = parseUsageCsv(csvText, dateRange);
-    const totals = calculateTotals(usageRows);
-    const unpricedModels = getUnpricedModels(usageRows);
+    const visibleUsageRows = usageRows.filter(hasRowUsage);
+    const totals = calculateTotals(visibleUsageRows);
+    const unpricedModels = getUnpricedModels(visibleUsageRows);
     const usageHeader = formatUsageHeader(dateRange.since, dateRange.until);
 
-    if (args.output === 'summary' && args.group === 'model') {
-      const rows = aggregateSummaryByModel(usageRows);
+    const report = createPreparedReport(args, visibleUsageRows);
 
-      if (args.json) {
-        console.log(
-          JSON.stringify(
-            buildJsonOutput('summary', 'model', false, dateRange.since, dateRange.until, rows, totals, unpricedModels),
-            null,
-            2,
-          ),
-        );
-        return;
-      }
-
-      if (rows.length === 0) {
-        console.log('No Cursor usage rows found for the selected date range.');
-        return;
-      }
-
-      console.log(`${usageHeader}\n`);
-      console.log(renderSummaryModel(rows, totals));
-    } else if (args.output === 'summary') {
-      const rows = aggregateSummaryByProvider(usageRows);
-
-      if (args.json) {
-        console.log(
-          JSON.stringify(
-            buildJsonOutput(
-              'summary',
-              'provider',
-              false,
-              dateRange.since,
-              dateRange.until,
-              rows,
-              totals,
-              unpricedModels,
-            ),
-            null,
-            2,
-          ),
-        );
-        return;
-      }
-
-      if (rows.length === 0) {
-        console.log('No Cursor usage rows found for the selected date range.');
-        return;
-      }
-
-      console.log(`${usageHeader}\n`);
-      console.log(renderSummaryProvider(rows, totals));
-    } else if (args.group === 'model') {
-      if (args.detailed) {
-        const days = aggregateDailyByModel(usageRows);
-
-        if (args.json) {
-          console.log(
-            JSON.stringify(
-              buildJsonOutput('daily', 'model', true, dateRange.since, dateRange.until, days, totals, unpricedModels),
-              null,
-              2,
-            ),
-          );
-          return;
-        }
-
-        if (days.length === 0) {
-          console.log('No Cursor usage rows found for the selected date range.');
-          return;
-        }
-
-        console.log(`${usageHeader}\n`);
-        console.log(renderDailyModel(days));
-      } else {
-        const days = aggregateDailySummaryByModel(usageRows);
-
-        if (args.json) {
-          console.log(
-            JSON.stringify(
-              buildJsonOutput('daily', 'model', false, dateRange.since, dateRange.until, days, totals, unpricedModels),
-              null,
-              2,
-            ),
-          );
-          return;
-        }
-
-        if (days.length === 0) {
-          console.log('No Cursor usage rows found for the selected date range.');
-          return;
-        }
-
-        console.log(`${usageHeader}\n`);
-        console.log(renderDailyModelSummary(days));
-      }
-    } else {
-      if (args.detailed) {
-        const days = aggregateDailyByProvider(usageRows);
-
-        if (args.json) {
-          console.log(
-            JSON.stringify(
-              buildJsonOutput(
-                'daily',
-                'provider',
-                true,
-                dateRange.since,
-                dateRange.until,
-                days,
-                totals,
-                unpricedModels,
-              ),
-              null,
-              2,
-            ),
-          );
-          return;
-        }
-
-        if (days.length === 0) {
-          console.log('No Cursor usage rows found for the selected date range.');
-          return;
-        }
-
-        console.log(`${usageHeader}\n`);
-        console.log(renderDailyProvider(days));
-      } else {
-        const days = aggregateDailySummaryByProvider(usageRows);
-
-        if (args.json) {
-          console.log(
-            JSON.stringify(
-              buildJsonOutput(
-                'daily',
-                'provider',
-                false,
-                dateRange.since,
-                dateRange.until,
-                days,
-                totals,
-                unpricedModels,
-              ),
-              null,
-              2,
-            ),
-          );
-          return;
-        }
-
-        if (days.length === 0) {
-          console.log('No Cursor usage rows found for the selected date range.');
-          return;
-        }
-
-        console.log(`${usageHeader}\n`);
-        console.log(renderDailyProviderSummary(days));
-      }
+    if (args.json) {
+      console.log(
+        JSON.stringify(
+          report.toJson(dateRange.since, dateRange.until, totals, unpricedModels),
+          null,
+          2,
+        ),
+      );
+      return;
     }
+
+    if (report.isEmpty) {
+      console.log('No Cursor usage rows found for the selected date range.');
+      return;
+    }
+
+    console.log(`${usageHeader}\n`);
+    console.log(report.render(totals));
 
     if (unpricedModels.length > 0) {
       console.error(
