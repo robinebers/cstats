@@ -402,28 +402,24 @@ export function formatDailySummaryRow(section: DailySummarySection): TableRow {
   ];
 }
 
-export function formatSummaryModelRow(row: ModelReportRow): TableRow {
+function formatSummaryRow(label: string, totals: ReportTotals): TableRow {
   return [
-    row.model,
-    formatNumber(row.inputTokens),
-    formatNumber(row.outputTokens),
-    formatNumber(row.cacheCreationTokens),
-    formatNumber(row.cacheReadTokens),
-    formatNumber(row.totalTokens),
-    formatCurrency(row.totalCost),
+    label,
+    formatNumber(totals.inputTokens),
+    formatNumber(totals.outputTokens),
+    formatNumber(totals.cacheCreationTokens),
+    formatNumber(totals.cacheReadTokens),
+    formatNumber(totals.totalTokens),
+    formatCurrency(totals.totalCost),
   ];
 }
 
+export function formatSummaryModelRow(row: ModelReportRow): TableRow {
+  return formatSummaryRow(row.model, row);
+}
+
 export function formatSummaryProviderRow(row: ProviderReportRow): TableRow {
-  return [
-    row.provider,
-    formatNumber(row.inputTokens),
-    formatNumber(row.outputTokens),
-    formatNumber(row.cacheCreationTokens),
-    formatNumber(row.cacheReadTokens),
-    formatNumber(row.totalTokens),
-    formatCurrency(row.totalCost),
-  ];
+  return formatSummaryRow(row.provider, row);
 }
 
 export function formatSummaryTotalsRow(totals: ReportTotals): TableRow {

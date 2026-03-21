@@ -1,4 +1,5 @@
 import type {
+  DailySection,
   DailyModelSection,
   DailyProviderSection,
   DailySummarySection,
@@ -19,6 +20,28 @@ function createEmptyTotals(): ReportTotals {
     totalTokens: 0,
     totalCost: 0,
   };
+}
+
+function hasUsage(totals: ReportTotals): boolean {
+  return (
+    totals.inputTokens !== 0 ||
+    totals.outputTokens !== 0 ||
+    totals.cacheCreationTokens !== 0 ||
+    totals.cacheReadTokens !== 0 ||
+    totals.totalTokens !== 0 ||
+    totals.totalCost !== 0
+  );
+}
+
+export function hasRowUsage(row: UsageRow): boolean {
+  return (
+    row.inputNoCacheWrite !== 0 ||
+    row.outputTokens !== 0 ||
+    row.inputCacheWrite !== 0 ||
+    row.cacheRead !== 0 ||
+    row.totalTokens !== 0 ||
+    row.estimatedCost !== 0
+  );
 }
 
 function addRowTotals(target: ReportTotals, row: UsageRow): void {
@@ -51,12 +74,12 @@ function sortByCostThenLabel<T extends ReportTotals>(
   });
 }
 
-function aggregateDaily<RowType>(
+function aggregateDaily<RowType extends ReportTotals>(
   rows: UsageRow[],
   getKey: (row: UsageRow) => string,
   buildRow: (key: string, totals: ReportTotals) => RowType,
-  getLabel: (row: RowType & ReportTotals) => string,
-): Array<{ date: string; rows: RowType[]; totals: ReportTotals }> {
+  getLabel: (row: RowType) => string,
+): Array<DailySection<RowType>> {
   const groupedByDate = new Map<
     string,
     {
@@ -66,6 +89,10 @@ function aggregateDaily<RowType>(
   >();
 
   for (const row of rows) {
+    if (!hasRowUsage(row)) {
+      continue;
+    }
+
     const dateEntry = groupedByDate.get(row.date) ?? {
       rowsByKey: new Map<string, ReportTotals>(),
       totals: createEmptyTotals(),
@@ -85,7 +112,7 @@ function aggregateDaily<RowType>(
       const dayRows = Array.from(value.rowsByKey.entries()).map(([key, totals]) => buildRow(key, totals));
       return {
         date,
-        rows: sortByCostThenLabel(dayRows as Array<RowType & ReportTotals>, getLabel),
+        rows: sortByCostThenLabel(dayRows, getLabel),
         totals: value.totals,
       };
     })
@@ -161,6 +188,10 @@ function aggregateDailySummary(
   >();
 
   for (const row of rows) {
+    if (!hasRowUsage(row)) {
+      continue;
+    }
+
     const entry = groupedByDate.get(row.date) ?? {
       labels: new Set<string>(),
       totals: createEmptyTotals(),
@@ -179,15 +210,19 @@ function aggregateDailySummary(
     .sort((left, right) => left.date.localeCompare(right.date));
 }
 
-function aggregateSummary<RowType>(
+function aggregateSummary<RowType extends ReportTotals>(
   rows: UsageRow[],
   getKey: (row: UsageRow) => string,
   buildRow: (key: string, totals: ReportTotals) => RowType,
-  getLabel: (row: RowType & ReportTotals) => string,
+  getLabel: (row: RowType) => string,
 ): RowType[] {
   const grouped = new Map<string, ReportTotals>();
 
   for (const row of rows) {
+    if (!hasRowUsage(row)) {
+      continue;
+    }
+
     const key = getKey(row);
     const totals = grouped.get(key) ?? createEmptyTotals();
     addRowTotals(totals, row);
@@ -195,5 +230,5 @@ function aggregateSummary<RowType>(
   }
 
   const summaryRows = Array.from(grouped.entries()).map(([key, totals]) => buildRow(key, totals));
-  return sortByCostThenLabel(summaryRows as Array<RowType & ReportTotals>, getLabel);
+  return sortByCostThenLabel(summaryRows, getLabel);
 }

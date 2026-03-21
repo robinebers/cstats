@@ -11,8 +11,11 @@ import {
   aggregateSummaryByModel,
   aggregateSummaryByProvider,
   calculateTotals,
+  hasRowUsage,
 } from '../src/aggregate.js';
 import { parseUsageCsv } from '../src/cursor-export.js';
+import { getUnpricedModels } from '../src/pricing.js';
+import type { UsageRow } from '../src/types.js';
 
 const fixturePath = fileURLToPath(new URL('./fixtures/usage-events-sample.csv', import.meta.url));
 
@@ -211,6 +214,102 @@ describe('usage aggregation', () => {
 
     const summaryRows = aggregateSummaryByProvider(rows);
     expect(summaryRows.map((row) => row.provider)).toEqual(['anthropic', 'openai', 'cursor']);
+  });
+
+  it('hides zero-only groups from summary and daily labels', () => {
+    const rows: UsageRow[] = [
+      {
+        timestamp: '2026-03-20T12:00:00.000Z',
+        date: '2026-03-20',
+        kind: 'Free',
+        model: 'real-model',
+        provider: 'openai',
+        maxMode: false,
+        inputCacheWrite: 0,
+        inputNoCacheWrite: 10,
+        cacheRead: 20,
+        outputTokens: 30,
+        totalTokens: 60,
+        estimatedCost: 1.23,
+        csvCost: 'Free',
+        canonicalModel: 'real-model',
+      },
+      {
+        timestamp: '2026-03-20T13:00:00.000Z',
+        date: '2026-03-20',
+        kind: 'Free',
+        model: 'zero-model',
+        provider: 'openai',
+        maxMode: false,
+        inputCacheWrite: 0,
+        inputNoCacheWrite: 0,
+        cacheRead: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCost: 0,
+        csvCost: 'Free',
+        canonicalModel: 'zero-model',
+      },
+    ];
+
+    expect(aggregateSummaryByModel(rows).map((row) => row.model)).toEqual(['real-model']);
+    expect(aggregateDailySummaryByModel(rows)[0]?.labels).toEqual(['real-model']);
+    expect(aggregateDailyByModel(rows)[0]?.rows.map((row) => row.model)).toEqual(['real-model']);
+  });
+
+  it('ignores zero-only unmapped models when building visible warnings', () => {
+    const rows: UsageRow[] = [
+      {
+        timestamp: '2026-03-20T12:00:00.000Z',
+        date: '2026-03-20',
+        kind: 'Free',
+        model: 'mapped-model',
+        provider: 'openai',
+        maxMode: false,
+        inputCacheWrite: 0,
+        inputNoCacheWrite: 10,
+        cacheRead: 20,
+        outputTokens: 30,
+        totalTokens: 60,
+        estimatedCost: 1.23,
+        csvCost: 'Free',
+        canonicalModel: 'mapped-model',
+      },
+      {
+        timestamp: '2026-03-20T13:00:00.000Z',
+        date: '2026-03-20',
+        kind: 'Free',
+        model: 'unmapped-zero-model',
+        provider: null,
+        maxMode: false,
+        inputCacheWrite: 0,
+        inputNoCacheWrite: 0,
+        cacheRead: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCost: 0,
+        csvCost: 'Free',
+        canonicalModel: null,
+      },
+      {
+        timestamp: '2026-03-20T14:00:00.000Z',
+        date: '2026-03-20',
+        kind: 'Free',
+        model: 'unmapped-live-model',
+        provider: null,
+        maxMode: false,
+        inputCacheWrite: 0,
+        inputNoCacheWrite: 5,
+        cacheRead: 0,
+        outputTokens: 7,
+        totalTokens: 12,
+        estimatedCost: 0,
+        csvCost: 'Free',
+        canonicalModel: null,
+      },
+    ];
+
+    expect(getUnpricedModels(rows.filter(hasRowUsage))).toEqual(['unmapped-live-model']);
   });
 
   it('calculates overall totals', () => {
