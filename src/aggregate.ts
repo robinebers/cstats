@@ -22,17 +22,6 @@ function createEmptyTotals(): ReportTotals {
   };
 }
 
-function hasUsage(totals: ReportTotals): boolean {
-  return (
-    totals.inputTokens !== 0 ||
-    totals.outputTokens !== 0 ||
-    totals.cacheCreationTokens !== 0 ||
-    totals.cacheReadTokens !== 0 ||
-    totals.totalTokens !== 0 ||
-    totals.totalCost !== 0
-  );
-}
-
 export function hasRowUsage(row: UsageRow): boolean {
   return (
     row.inputNoCacheWrite !== 0 ||
