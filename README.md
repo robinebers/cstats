@@ -11,9 +11,10 @@ Use it to answer questions like “how much did I spend last month?”, “which
 | Requirement | Notes |
 |-------------|--------|
 | **Node.js** | v20+ recommended (ESM, `fetch`). |
-| **macOS** | Auth is implemented for Cursor’s **macOS** storage: VS Code `state.vscdb` and the macOS Keychain. |
+| **Windows or macOS** | Auth is supported via Cursor's local `state.vscdb`; macOS also keeps a Keychain fallback for older setups. |
+| **Linux** | Supported by path convention using `~/.config/Cursor/User/globalStorage/state.vscdb`, but less battle-tested than Windows/macOS. |
 | **Cursor account** | You must be signed into the Cursor app so a valid access/refresh token exists locally. |
-| **`sqlite3` CLI** | Used read-only to read tokens from Cursor’s SQLite state file (usually present on macOS). |
+| **`sqlite3` CLI** | Required to read Cursor's local SQLite state database and persist refreshed access tokens. |
 
 If export fails with 401/403, open Cursor and sign in again so tokens refresh.
 
@@ -50,7 +51,7 @@ node dist/src/cli.js --help
 
 ## How it works (short)
 
-1. **Authentication** — Reads Cursor OAuth tokens from `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` and/or the macOS Keychain, refreshes the access token when needed, and builds the session cookie Cursor’s API expects.
+1. **Authentication** — Reads Cursor OAuth tokens from the platform-specific `state.vscdb` location: `%APPDATA%\Cursor\User\globalStorage\state.vscdb` on Windows, `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` on macOS, and `~/.config/Cursor/User/globalStorage/state.vscdb` on Linux. On macOS it also falls back to the Keychain if SQLite lookup fails. The CLI refreshes the access token when needed and builds the session cookie Cursor’s API expects.
 2. **Export** — Downloads the same CSV you get from the dashboard: `export-usage-events-csv` with token strategy.
 3. **Parsing & aggregation** — Parses rows, filters by your chosen date range, and rolls up totals.
 4. **Pricing** — Maps each row’s model id to per-million token rates in `src/pricing-manifest.ts` (input, cache read/write, output, max-mode uplift where applicable). Unknown models are listed in a **warning** at the end; their cost lines show as unpriced in the logic (see source for details).
