@@ -146,3 +146,11 @@ MIT — see `package.json`.
 ## Disclaimer
 
 This project is not affiliated with Cursor. It uses your **local** Cursor login only to call the same export endpoint the dashboard uses. Review Cursor’s terms of service for your account. Use at your own risk.
+
+---
+
+## Acknowledgements
+
+Big inspiration from [ccusage](https://github.com/ryoppippi/ccusage), the excellent CLI for analyzing Claude Code token usage and costs.
+
+This project is entirely [vibe coded](https://en.wikipedia.org/wiki/Vibe_coding).
