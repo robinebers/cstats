@@ -200,6 +200,30 @@ export const pricingManifest: PricingManifest = {
       source_url: 'https://ai.google.dev/gemini-api/docs/pricing',
       notes: 'Google Gemini API paid tier <= 200k prompt pricing.',
     },
+    'gpt-5-mini': {
+      display_name: 'GPT-5 Mini',
+      provider: 'openai',
+      input_per_million: 0.25,
+      cache_write_per_million: 0.25,
+      cache_read_per_million: 0.025,
+      output_per_million: 2.0,
+      apply_max_mode_uplift: true,
+      source_url: 'https://platform.openai.com/docs/models/gpt-5-mini',
+      notes:
+        'OpenAI GPT-5 Mini standard pricing; cached input follows the 90% discount pattern.',
+    },
+    'grok-4-20-thinking': {
+      display_name: 'Grok 4.20 (Thinking)',
+      provider: 'xai',
+      input_per_million: 2.0,
+      cache_write_per_million: 2.0,
+      cache_read_per_million: 0.5,
+      output_per_million: 6.0,
+      apply_max_mode_uplift: true,
+      source_url: 'https://cursor.com/docs/models/grok-4-20',
+      notes:
+        'xAI Grok 4.20 reasoning pricing from Cursor Docs; cache-read inferred at 25% of input following xAI Grok 4 series pattern.',
+    },
     'gpt-5.1-codex': {
       display_name: 'GPT-5.1 Codex',
       provider: 'openai',
@@ -374,6 +398,16 @@ export const pricingManifest: PricingManifest = {
     {
       pattern: '^gemini-3\\.1-pro-preview$',
       canonical: 'gemini-3.1-pro-preview',
+      reason: 'Direct provider model.',
+    },
+    {
+      pattern: '^gpt-5-mini$',
+      canonical: 'gpt-5-mini',
+      reason: 'Direct provider model.',
+    },
+    {
+      pattern: '^grok-4-20-thinking$',
+      canonical: 'grok-4-20-thinking',
       reason: 'Direct provider model.',
     },
     {
