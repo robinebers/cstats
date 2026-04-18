@@ -132,6 +132,30 @@ export const pricingManifest: PricingManifest = {
       notes:
         'Cursor docs state Opus 4.6 pricing stays at the listed per-token rates in Max Mode; the fast variant uses its own published fast-mode base rates.',
     },
+    'claude-4.7-opus': {
+      display_name: 'Claude 4.7 Opus',
+      provider: 'anthropic',
+      input_per_million: 5.0,
+      cache_write_per_million: 6.25,
+      cache_read_per_million: 0.5,
+      output_per_million: 25.0,
+      apply_max_mode_uplift: false,
+      source_url: 'https://cursor.com/docs/models/claude-opus-4-6',
+      notes:
+        'Claude Opus 4.7 shares the same per-token rates as Opus 4.6 per Cursor docs.',
+    },
+    'claude-4.7-opus-fast': {
+      display_name: 'Claude 4.7 Opus (Fast mode)',
+      provider: 'anthropic',
+      input_per_million: 30.0,
+      cache_write_per_million: 37.5,
+      cache_read_per_million: 3.0,
+      output_per_million: 150.0,
+      apply_max_mode_uplift: false,
+      source_url: 'https://cursor.com/docs/models/claude-opus-4-6',
+      notes:
+        'Claude Opus 4.7 fast mode shares the same per-token rates as Opus 4.6 fast per Cursor docs.',
+    },
     'gemini-3-flash': {
       display_name: 'Gemini 3 Flash',
       provider: 'google',
@@ -321,6 +345,16 @@ export const pricingManifest: PricingManifest = {
       pattern: '^claude-4\\.6-opus-(?:low|medium|high|max)(?:-thinking)?-fast$',
       canonical: 'claude-4.6-opus-fast',
       reason: 'Fast mode has separate published Cursor pricing.',
+    },
+    {
+      pattern: '^claude-opus-4-7(?:-thinking)?(?:-(?:low|medium|high|max))?$',
+      canonical: 'claude-4.7-opus',
+      reason: 'All effort/thinking variants use base Opus 4.7 rates.',
+    },
+    {
+      pattern: '^claude-opus-4-7(?:-thinking)?(?:-(?:low|medium|high|max))?-fast$',
+      canonical: 'claude-4.7-opus-fast',
+      reason: 'Fast mode uses Opus 4.6 fast rates as closest published pricing.',
     },
     {
       pattern: '^gemini-3-flash(?:-preview)?$',
